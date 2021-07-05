@@ -1,4 +1,4 @@
-# name=Mixer Control Script
+# name=API
 # url=https://forum.image-line.com/viewtopic.php?p=1483607#p1483607
 
 # This import section is loading the back-end code required to execute the script. You may not need all modules that are available for all scripts.
