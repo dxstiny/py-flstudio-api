@@ -1,0 +1,237 @@
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+</head>
+
+<body>
+    <div class="header">
+        <button onclick="createCard(slot = -1)">Add Generator</button>
+        <button onclick="createCard(slot = 0)">Add Effect</button>
+        <button onclick="removeAll()">Remove All</button>
+    </div>
+    <div class="wrapper" id="main">
+        <datalist id="generators">
+            <option value="Serum">
+            <option value="Lead">
+            <option value="Sylenth">
+            <option value="Chord">
+            <option value="Piano">
+            <option value="String">
+            <option value="Staccato">
+            <option value="Bass">
+        </datalist>
+
+        <datalist id="gen-parameters">
+            <option value="Macro 1">
+            <option value="Macro 2">
+            <option value="Macro 3">
+            <option value="Macro 4">
+            <option value="Master">
+            <option value="Mix">
+            <option value="Cutoff">
+            <option value="Porttime">
+            <option value="FilterCtl Cutoff">
+            <option value="Gain">
+        </datalist>
+    </div>
+</body>
+
+</html>
+
+<script>
+    const cache = JSON.parse(localStorage.getItem('plugins')) || [];
+    cache.forEach(x => {
+        createCard(x?.slot, x.plugin, x.param, x.value)
+    })
+
+    // iOS detection from: stackoverflow.com/a/9039885 with explanation about MSStream
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+        var inputs = document.querySelectorAll('input[type="number"]');
+        for (var i = inputs.length; i--;)
+            inputs[i].setAttribute('pattern', '\\d*');
+    }
+
+    function removeAll() {
+        document.getElementById("main").innerHTML = "";
+        cacheValues();
+    }
+
+    function createCard(slot = -1, plugin = "", param = "", value = 50) {
+        console.log(slot)
+
+        let ci = 0
+        const cachedValues = []
+
+        for (; document.getElementById("main").innerHTML.includes(`pl${ci}`); ci++);
+
+        for (let i = 0; i < ci; i++) {
+            const plugin = document.getElementById(`pl${i}`).value
+            const param = document.getElementById(`pr${i}`).value
+            const value = document.getElementById(`vl${i}`).value
+            const slot = document.getElementById(`sl${i}`)?.value
+
+            cachedValues.push({
+                plugin,
+                param,
+                value,
+                slot
+            })
+        }
+
+        console.log(cachedValues)
+
+        if (slot == -1) {
+            document.getElementById("main").innerHTML +=
+                `<div class='card'><h5>Generator</h5><input list="generators" onchange='cacheValues()' value='${plugin}' id='pl${ci}' type='text'><h5>Parameter</h5><input list="gen-parameters" onchange='cacheValues()' value='${param}' id='pr${ci}' type='text'><input id='vl${ci}' value='${value}' oninput='set(${ci})' type='range'></div>`;
+        } else {
+            document.getElementById("main").innerHTML +=
+                `<div class='card'><h5>Effect Index</h5><input onchange='cacheValues()' id='pl${ci}' value='0' min='0' type='number'><h5>Mixer Insert</h5><input onchange='cacheValues()' value='${slot}' id='sl${ci}' min='-1' type='number'><h5>Parameter</h5><input onchange='cacheValues()' value='${param}' id='pr${ci}' type='text'><input id='vl${ci}' value='${value}' oninput='set(${ci})' type='range'></div>`;
+        }
+
+        for (let i = 0; i < ci; i++) {
+            document.getElementById(`pl${i}`).value = cachedValues[i].plugin;
+            document.getElementById(`pr${i}`).value = cachedValues[i].param;
+            document.getElementById(`vl${i}`).value = cachedValues[i].value;
+
+            if (document.getElementById(`sl${i}`)) {
+                document.getElementById(`sl${i}`).value = cachedValues[i]?.slot;
+            }
+        }
+    }
+
+    function cacheValues() {
+        const cachedValues = [];
+
+        let ci = 0
+        for (; document.getElementById("main").innerHTML.includes(`pl${ci}`); ci++);
+
+        for (let i = 0; i < ci; i++) {
+            const plugin = document.getElementById(`pl${i}`).value
+            const param = document.getElementById(`pr${i}`).value
+            const value = document.getElementById(`vl${i}`).value
+            const slot = document.getElementById(`sl${i}`)?.value
+
+            cachedValues.push({
+                plugin,
+                param,
+                value,
+                slot
+            })
+        }
+
+        console.log(cachedValues)
+
+        localStorage.setItem('plugins', JSON.stringify(cachedValues));
+    }
+
+    function set(index) {
+        cacheValues();
+
+        let slot = Number(document.getElementById(`sl${index}`)?.value || -1)
+        let plugin = slot >= 0 ? Number(document.getElementById(`pl${index}`).value) : document.getElementById(
+            `pl${index}`).value
+        const param = document.getElementById(`pr${index}`).value
+        const value = document.getElementById(`vl${index}`).value
+
+        if (slot >= 0) {
+            let x = slot
+            slot = plugin
+            plugin = x
+        }
+
+        console.log(plugin, param, value)
+
+        fetch("/plugins", {
+            method: "POST",
+            body: JSON.stringify({
+                plugin,
+                param,
+                value,
+                slot
+            })
+        })
+    }
+</script>
+
+<style>
+    body,
+    html {
+        padding: 0;
+        margin: 0;
+        height: auto;
+        background: #1e1e27;
+        color: white;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .header {
+        height: 40px;
+        display: flex;
+        justify-content: space-evenly;
+        align-items: center;
+        background: #27293d;
+    }
+
+    button {
+        height: 30px;
+        background: none;
+        color: white;
+        border: 1px solid white;
+    }
+
+    button:active {
+        height: 30px;
+        background: white;
+        color: #27293d;
+        border: none;
+    }
+
+    .wrapper {
+        display: flex;
+        justify-content: space-evenly;
+        align-items: center;
+        height: 100%;
+        flex-wrap: wrap;
+    }
+
+    h5 {
+        margin: 2px;
+    }
+
+    input {
+        margin: 2px;
+        background: none;
+        border: none;
+        border-bottom: 1px solid white;
+        color: white;
+    }
+
+    .card {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        flex-wrap: wrap;
+
+        width: 300px;
+        height: 300px;
+        background: #27293d;
+        border-radius: 10px;
+        -moz-box-shadow: 0 0 50px 5px rgba(0, 0, 0, 0.596);
+        -webkit-box-shadow: 0 0 50px 5px rgba(0, 0, 0, 0.596);
+        padding: 10px;
+        margin: 10px;
+        color: whitesmoke;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        overflow: visible;
+        cursor: pointer;
+    }
+</style>
