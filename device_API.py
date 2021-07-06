@@ -1,7 +1,6 @@
 # name=API
-# url=https://forum.image-line.com/viewtopic.php?p=1483607#p1483607
-
-# This import section is loading the back-end code required to execute the script. You may not need all modules that are available for all scripts.
+# url=https://github.com/dxstiny/py-flstudio-api/
+# author=dxstiny
 
 import sys
 
@@ -11,129 +10,116 @@ import mixer
 import ui
 import midi
 import plugins
-import channels
 
-#The next two variables are constants defined up here so you don't need tp go hunting in the script to find them later. Good habit. 
-#You can name these as you like, so long as you use them in the script below as written ...
+from enum import Enum
 
-import time
+from API_Finder import Finder
+import API_logging
 
 print()
-print("findParam(query: str, plugin: number) -> e.g. (Gain, 2)")
-print("findPluginNameIndex(query: str) -> e.g. Lead 1, TwoKnob Piano, ...")
-print("findPluginIndex(query: str) -> e.g. Serum, Patcher, ...")
+print("finder.firstParamByName(query: str, plugin: number) -> e.g. (Gain, 2)")
+print("finder.firstPluginByCallName(query: str) -> e.g. Lead 1, TwoKnob Piano, ...")
+print("finder.firstPluginByPluginName(query: str) -> e.g. Serum, Patcher, ...")
 print()
 
-expectedMessageType = -1
+class MessageType(Enum):
+	def __gt__(self, b):
+		return self.value > b.value
+
+	none = -1
+	SetMixer = 0
+	SetPluginParameter = 1
+	CachePluginIndex = 2
+	CacheParameterIndex = 3
+	SetCachedPluginParameter = 4
+	SetCachedPluginCachedParameter = 5
+
+expectedMessageType = MessageType.none
 cachedPlugin = ""
 cachedParam = ""
 
-class TSimple():
+finder = Finder()
+logger = API_logging.GetLogger()
+API_logging.SetLevel(API_logging.Level.info)
 
-	def OnMidiMsg(self, event):
-		global cachedPlugin, cachedParam, expectedMessageType
+def OnMidiMsg(event):
+	global cachedPlugin, cachedParam, expectedMessageType
 
-		event.handled = True
+	event.handled = True
 
-		if event.midiId == midi.MIDI_NOTEON:
-			if (event.pmeFlags & midi.PME_System != 0):
+	if event.midiId == midi.MIDI_NOTEON:
+		if event.pmeFlags & midi.PME_System != 0:
 
-				byte1, byte2, nibble3 = event.note, event.velocity, event.midiChan
+			byte1, byte2, nibble3 = event.note, event.velocity, event.midiChan
 
-				#print(byte1, byte2, nibble3)
+			logger.trace(str(byte1) + " " + str(byte2) + " " + str(nibble3))
 
-				if byte1 == 126: # start
-					print("receive start bit for " + str(byte2))
-					expectedMessageType = byte2
-					if byte2 == 2:
-						cachedPlugin = ""
-					if byte2 == 3:
-						cachedParam = ""
+			if byte1 == 126: # start
+				logger.debug("receive start bit for " + str(MessageType(byte2)))
+				expectedMessageType = MessageType(byte2)
+				if byte2 == 2:
+					cachedPlugin = ""
+				if byte2 == 3:
+					cachedParam = ""
 
-				elif byte1 == 127: # stop
-					print("receive stop bit for " + str(byte2))
-					expectedMessageType = -1
+			elif byte1 == 127: # stop
+				logger.debug("receive stop bit for " + str(MessageType(byte2)))
+				expectedMessageType = -1
 
-				elif expectedMessageType >= 0:
-					if expectedMessageType == 0:
-						setMixer(byte1, byte2 / 100)
-					elif expectedMessageType == 1:
-						setParam(byte1, nibble3, byte2 / 100)
-					elif expectedMessageType == 2:
-						char = byte1 + byte2
-						c = chr(char)
-						cachedPlugin += c
-					elif expectedMessageType == 3:
-						char = byte1 + byte2
-						c = chr(char)
-						cachedParam += c
-					elif expectedMessageType == 4:
-						plugin = findPluginNameIndex(cachedPlugin)
-						print(cachedPlugin, plugin)
-						setParam(plugin, byte2, byte1 / 100)
-					elif expectedMessageType == 5:
-						print(byte1, byte2)
-						byte2 = -1 if byte2 == 127 else byte2
-						plugin = findPluginNameIndex(cachedPlugin, byte2)
-						param = findParam(cachedParam, plugin, byte2)
-						print(cachedPlugin, plugin, param, byte2)
-						setParam(plugin, param, byte1 / 100, byte2)
-			else:
-				event.handled = False
+			elif expectedMessageType > MessageType.none:
+				if expectedMessageType == MessageType.SetMixer:
+					setMixer(byte1, byte2 / 100)
+
+				elif expectedMessageType == MessageType.SetPluginParameter:
+					setParam(byte1, nibble3, byte2 / 100)
+
+				elif expectedMessageType == MessageType.CachePluginIndex:
+					char = byte1 + byte2
+					c = chr(char)
+					cachedPlugin += c
+
+				elif expectedMessageType == MessageType.CacheParameterIndex:
+					char = byte1 + byte2
+					c = chr(char)
+					cachedParam += c
+
+				elif expectedMessageType == MessageType.SetCachedPluginParameter:
+					plugin = finder.firstPluginByCallName(cachedPlugin)
+					if plugin == -1:
+						logger.warning("no plugin w/ call name '" + cachedPlugin + "' found")
+						return
+
+					nibble3 = -1 if nibble3 == 15 else nibble3
+					setParam(plugin, byte2, byte1 / 100, nibble3)
+
+				elif expectedMessageType == MessageType.SetCachedPluginCachedParameter:
+					logger.trace(str(byte1) + " " + str(byte2))
+					byte2 = -1 if byte2 == 127 else byte2
+					plugin = finder.firstPluginByCallName(cachedPlugin, byte2)
+					if plugin == -1:
+						logger.warning("no plugin w/ call name '" + str(cachedPlugin) + "' found")
+						return
+
+					param = finder.firstParamByName(cachedParam, plugin, byte2)
+					if param == -1:
+						logger.warning("no param w/ call name '" + str(cachedParam) + "' for plugin '" + str(cachedPlugin) + "' found")
+						return
+
+					setParam(plugin = plugin, param = param, value = (byte1 / 100), slot = byte2)
 		else:
 			event.handled = False
+	else:
+		event.handled = False
 
-Simple = TSimple()
-
-def setParam(plugin, param, value, slot):
-	print("set param '" + plugins.getParamName(param, plugin, slot) + "' of plugin '" + plugins.getPluginName(plugin, slot) + "' to '" + str(value) + "'")
+def setParam(plugin, param, value, slot = -1):
+	logger.info("set param '"
+		+ plugins.getParamName(param, plugin, slot)
+		+ "' of plugin '"
+		+ plugins.getPluginName(plugin, slot)
+		+ "' to '" + str(value) + "'")
 	plugins.setParamValue(value, param, plugin, slot)
 
 def setMixer(track, volume):
-	print(track, volume)
+	logger.info(str(track) + " " + str(volume))
 	ui.showWindow(midi.widMixer)
 	mixer.setTrackVolume(track, volume)
-
-def OnMidiMsg(event):
-	Simple.OnMidiMsg(event)
-
-def rand_val(x):
-    random=int(time.time()*1000)
-    random %= x
-    return random
-
-def findParam(query, plugin, slot):
-	count = plugins.getParamCount(plugin, slot)
-	for i in range(count):
-		if query.lower() in plugins.getParamName(i, plugin, slot).lower():
-			print(plugins.getParamName(i, plugin, slot))
-			return i
-	return -1
-
-def findPluginNameIndex(query, slot):
-	if slot is not -1:
-		return ord(query)
-
-	count = channels.channelCount(1)
-
-	for i in range(count):
-		print(channels.getChannelName(i))
-		if query.lower() in channels.getChannelName(i).lower():
-			try:
-				print(plugins.getPluginName(i) + " named " + channels.getChannelName(i))
-				return i
-			except:
-				pass
-	return -1
-
-def findPluginIndex(query):
-	count = channels.channelCount(1)
-
-	for i in range(count):
-		try:
-			if query.lower() in plugins.getPluginName(i).lower():
-				#print(plugins.getPluginName(i))
-				return i
-		except TypeError:
-			pass
-	return -1
