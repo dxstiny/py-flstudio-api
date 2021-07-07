@@ -19,7 +19,7 @@
 <script>
     for (let i = 0; i < 11; i++) {
         const wrapper = document.getElementById("wrapper");
-        wrapper.innerHTML += `<input type="range" min="0" max="100" id="${i}" onchange="updateMixer(${i}, value)">`
+        wrapper.innerHTML += `<input type="range" min="0" max="100" id="${i}" oninput="updateMixer(${i}, value)">`
     }
 
     function updateMixer(id, value) {
@@ -191,7 +191,6 @@ function compute(e) {
     input[type="range"]::-webkit-slider-runnable-track {
         background: var(--glass-gradient);
         height: 5px;
-        width: 8vw;
         border-radius: 10px;
     }
 

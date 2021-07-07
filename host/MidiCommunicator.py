@@ -8,7 +8,27 @@ import pygame.midi
 class MidiCommunicator():
     def __init__(self):
         pygame.midi.init()
-        self._player = pygame.midi.Output(4)
+        self._player = pygame.midi.Output(self._tryFindOutputDevice())
+
+    def _tryFindOutputDevice(self):
+        devices = self._getOutputDevices()
+        for device in devices:
+            if "loopMIDI" in device["name"]:
+                print("device " + device["name"] + " found")
+                return device["id"]
+        print("no device found, defaulting to " + devices[0]["name"])
+        return devices[0]["id"]
+
+    def _getOutputDevices(self):
+        l = []
+        device_count = pygame.midi.get_count()
+        for d in range(device_count):
+            device = pygame.midi.get_device_info(d)
+            device_name = device[1].decode()
+            device_type = device[2]
+            if device_type == 0:
+                l.append({"name": device_name, "id": d})
+        return l
 
     def _normaliseSlot(self, slot, max = 127):
         return max if slot == -1 else 0
@@ -104,8 +124,8 @@ class MidiCommunicator():
             self._sendBytes(byte1, byte2)
             return
 
-        for i in range(len(string)):
-            char = ord(string[i])
+        for cha in string:
+            char = ord(cha)
             byte1 = 127 if char > 127 else char
             byte2 = char - 127 if char > 127 else 0
             self._sendBytes(byte1, byte2)
