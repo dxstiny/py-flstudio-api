@@ -20,13 +20,14 @@ create a loopmidi port and in fl studio, add it as an input device and select AP
 
 Run Script
 ```sh
+cd host/
 python main.py
 ```
 
 connect
 
-UI http://localhost:1234/ui/mixer/
-UI http://localhost:1234/ui/plugins/
+- Mixer-UI http://localhost:1234/ui/mixer/
+- Plugin-UI http://localhost:1234/ui/plugins/
 
-POST http://localhost:1234/mixer # todo
-POST http://localhost:1234/plugins # todo
+- POST http://localhost:1234/mixer # todo
+- POST http://localhost:1234/plugins # todo
